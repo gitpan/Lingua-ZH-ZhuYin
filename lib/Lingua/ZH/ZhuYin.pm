@@ -10,11 +10,11 @@ Lingua::ZH::ZhuYin - The great new Lingua::ZH::ZhuYin!
 
 =head1 VERSION
 
-Version 0.01
+Version 0.02
 
 =cut
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 use Encode qw/decode/;
 use List::Util qw/min max/;
 
