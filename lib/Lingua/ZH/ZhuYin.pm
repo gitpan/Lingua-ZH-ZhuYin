@@ -10,13 +10,16 @@ Lingua::ZH::ZhuYin - The great new Lingua::ZH::ZhuYin!
 
 =head1 VERSION
 
-Version 0.02
+Version 0.03
 
 =cut
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
+our $AUTOLOAD;
+our %ok_field;
 use Encode qw/decode/;
 use List::Util qw/min max/;
+use Lingua::ZH::ZhuYin::Dict;
 
 
 =head1 SYNOPSIS
@@ -38,19 +41,61 @@ if you don't export anything, such as for a purely object-oriented module.
 
 =head1 FUNCTIONS
 
-=head2 ZhuYin
+=head2 AUTOLOAD
 
 =cut
 
-sub ZhuYin {
+for my $attr ( qw(dictfile) ) { $ok_field{$attr}++; } 
+
+sub AUTOLOAD {
+    my $self = shift;
+    my $attr = $AUTOLOAD;
+    $attr =~ s/.*:://;
+    return if $attr eq 'DESTROY';   
+
+    if ($ok_field{$attr}) {
+	$self->{lc $attr} = shift if @_;
+	return $self->{lc $attr};
+    } else {
+	my $superior = "SUPER::$attr";
+	$self->$superior(@_);
+    } 
+}
+
+=head2 new
+
+=cut
+
+sub new {
+    my $class = shift;
+    my $self = {
+	dictfile => undef,
+    };
+    if(@_) {
+	my %arg = @_;
+
+	foreach (keys %arg) {
+	    $self->{lc($_)} = $arg{$_};
+	}
+    }
+    bless ($self, $class);
+    return($self);
+}
+
+=head2 zhuyin
+
+=cut
+
+sub zhuyin {
     my $self = shift;
     my $word = shift;
+    die "DictFile does not exist" unless $self->dictfile;
     my $utf8word = decode('utf8',$word);
-    my @zhuyins = guess_zhuyin($word);
+    my @zhuyins = $self->guess_zhuyin($word);
     push @zhuyins , $utf8word if (! @zhuyins and length($utf8word) == 1);
     return '' if $zhuyins[0] eq '0';
     warn 'no zhuyin found: '.$word if ! @zhuyins;
-    return @zhuyins;
+    return \@zhuyins;
 }
 
 =head2 guess_zhuyin
@@ -58,11 +103,13 @@ sub ZhuYin {
 =cut
 
 sub guess_zhuyin {
+    my $self = shift;
     my $word = shift;
-    # perform guess zuyin from ABCDE, ABCD E, ABC DE, AB CDE, A BCDE
-    my @zuyins;
+    # perform guess zhuyin from ABCDE, ABCD E, ABC DE, AB CDE, A BCDE
+    my @zhuyins;
+    my $Dict = Lingua::ZH::ZhuYin::Dict->new($self->dictfile);
     for my $i (0..(length($word) - 1)) {
-	@zuyins = ();
+	@zhuyins = ();
 	my $offset = length($word) - $i;
 	my $pre_word = substr($word,0,$offset);
 	my $post_word = '';
@@ -70,47 +117,46 @@ sub guess_zhuyin {
 	my $skip = 1;
 	die "word error " unless $word eq $pre_word.$post_word;
 	if ($pre_word and $pre_word ne "") {
-	    my @pre_zuyins = query_zuyin($pre_word);
-	    $skip = 0 if @pre_zuyins;
-	    push @zuyins, @pre_zuyins;
+	    my @pre_zhuyins = $Dict->queryZhuYin($pre_word);
+	    $skip = 0 if @pre_zhuyins;
+	    push @zhuyins, @pre_zhuyins;
 	}
 	if ($skip == 0 and $post_word and $post_word ne "") {
 	    $skip = 1;
-	    my @post_zuyins = query_zuyin($post_word);
-	    $skip = 0 if @post_zuyins;
-	    my @tmp_zuyins = ();
-	    foreach my $j (0..$#zuyins) {
-		foreach my $yin (@post_zuyins) {
-		    push @tmp_zuyins, $zuyins[$j] ."  ". $yin;
+	    my @post_zhuyins = $Dict->query_zhuyin($post_word);
+	    $skip = 0 if @post_zhuyins;
+	    my @tmp_zhuyins = ();
+	    foreach my $j (0..$#zhuyins) {
+		foreach my $yin (@post_zhuyins) {
+		    push @tmp_zhuyins, $zhuyins[$j] ."  ". $yin;
 		}
 	    }
-	    @zuyins = @tmp_zuyins;
+	    @zhuyins = @tmp_zhuyins;
 	}
-	return @zuyins if $skip == 0;
+	return @zhuyins if $skip == 0;
     }
 
     return if length($word) == 1;
-    # preform A B C D E, if each term has unique zuyin, then we done,
+    # preform A B C D E, if each term has unique zhuyin, then we done,
     # otherwise need further process
     my @array = ();
     my @ambig = ();
-    @zuyins = ();
+    @zhuyins = ();
     my $skip = 0;
     for my $i (0..(length($word) - 1)) {
 	my $unichar = substr($word,$i,1);
-	my @uni_zuyins = query_zuyin($unichar);
-	#die "Can not find zuyin for $unichar\n" unless @uni_zuyins;
-	return '0' unless @uni_zuyins;
-	if (scalar @uni_zuyins != 1) {
+	my @uni_zhuyins = $Dict->queryZhuYin($unichar);
+	return '0' unless @uni_zhuyins;
+	if (scalar @uni_zhuyins != 1) {
 	    $array[$i] = 1;
 	    push @ambig, $i;
 	    $skip = 1;
 	} else {
 	    $array[$i] = 0;
-	    $zuyins[$i] = $uni_zuyins[0];
+	    $zhuyins[$i] = $uni_zhuyins[0];
 	}
     }
-    return @zuyins if $skip == 0;
+    return @zhuyins if $skip == 0;
 
     # if B is amibiguos, we chcek AB, BC, ABC, BCD ...
     # otherwise, return the first one
@@ -123,13 +169,10 @@ sub guess_zhuyin {
 	    my $pos_e = min (length($word), $amb);
 	    for my $pos ($pos_b..$pos_e) {
 		next if $not_found == 0;
-#		warn substr($word,$pos,$len);
-		my @ngram_zuyins = query_zuyin(substr($word,$pos,$len));
-		if (scalar @ngram_zuyins == 1) { # yatta !!!
-		    my @zuyin_array = split /  /,$ngram_zuyins[0];
-#		    warn $ngram_zuyins[0];
-#		    warn $zuyin_array[$amb-$pos];
-		    $zuyins[$amb] = $zuyin_array[$amb-$pos];
+		my @ngram_zhuyins = $Dict->queryZhuYin(substr($word,$pos,$len));
+		if (scalar @ngram_zhuyins == 1) { # yatta !!!
+		    my @zhuyin_array = split /  /,$ngram_zhuyins[0];
+		    $zhuyins[$amb] = $zhuyin_array[$amb-$pos];
 		    $not_found = 0;
 		}
 	    }
@@ -137,11 +180,11 @@ sub guess_zhuyin {
 	}
 	if ($not_found) { # still not found
 	    my $unichar = substr($word,$amb,1);
-	    my @uni_zuyins = query_zuyin($unichar);
-	    $zuyins[$amb] = $uni_zuyins[0];
+	    my @uni_zhuyins = $Dict->queryZhuYin($unichar);
+	    $zhuyins[$amb] = $uni_zhuyins[0];
 	}
     }
-    return join "  ",@zuyins;
+    return join "  ",@zhuyins;
 }
 
 =head1 AUTHOR

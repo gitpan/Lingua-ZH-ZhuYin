@@ -9,11 +9,11 @@ Lingua::ZH::ZhuYin::Dict - The backend dictionary for converting zhuyin
 
 =head1 VERSION
 
-Version 0.01
+Version 0.03
 
 =cut
 
-our $VERSION = '0.01';
+our $VERSION = $Lingua::ZH::ZhuYin::VERSION;
 use DBI qw(:sql_types);
 use DBD::SQLite;
 
@@ -41,15 +41,17 @@ if you don't export anything, such as for a purely object-oriented module.
 
 sub new {
     my $class = shift;
-    my $dictFile = shift || 'moedict.db';
     my $self = {
-	dictFile = $dictFile,
+	table => undef,
 	dbh => undef,
     };
+    my $dictFile = shift || 'moedict.db';
     if ( -f $dictFile ) {
 	my $dsn = "dbi:SQLite:dbname=$dictFile";
 	$self->{dbh} = DBI->connect($dsn, "","");
     }
+    ($self->{table}) = ($dictFile =~ /(\w+)\.db/);
+    $self->{table} ||= 'moedict';
     bless ($self, $class);
     return($self);
 }
@@ -58,14 +60,15 @@ sub new {
 
 =cut
 
-sub QueryZhuyin {
+sub queryZhuYin {
     my $self = shift;
     my $word = shift;
 
     return unless $self->{dbh};
 
     my @zhuyins;
-    my $sth = $self->{dbh}->prepare("SELECT zhuyin from moedict WHERE word = ?");
+    my $table = $self->{table};
+    my $sth = $self->{dbh}->prepare("SELECT zhuyin from $table WHERE word = ?");
     $sth->execute($word) || die DBI::err.": ".$DBI::errstr;
     while (my $hash_ref = $sth->fetchrow_hashref) {
 	push @zhuyins, $hash_ref->{zhuyin};
