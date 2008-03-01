@@ -12,3 +12,5 @@ Revision history for Lingua-ZH-ZhuYin
 	- add examples/
 	- add t/01-basic.t for usage
 
+0.04	Sat Mar  1 15:06:25 CST 2008
+        - tiny code fixes

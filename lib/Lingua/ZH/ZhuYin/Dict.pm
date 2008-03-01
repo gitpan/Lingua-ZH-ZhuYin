@@ -13,7 +13,7 @@ Version 0.03
 
 =cut
 
-our $VERSION = $Lingua::ZH::ZhuYin::VERSION;
+our $VERSION = 0.03;
 use DBI qw(:sql_types);
 use DBD::SQLite;
 
@@ -56,7 +56,7 @@ sub new {
     return($self);
 }
 
-=head2 QueryZhuyin
+=head2 queryZhuYin
 
 =cut
 

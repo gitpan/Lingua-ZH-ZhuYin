@@ -10,11 +10,11 @@ Lingua::ZH::ZhuYin - The great new Lingua::ZH::ZhuYin!
 
 =head1 VERSION
 
-Version 0.03
+Version 0.04
 
 =cut
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 our $AUTOLOAD;
 our %ok_field;
 use Encode qw/decode/;
@@ -123,7 +123,7 @@ sub guess_zhuyin {
 	}
 	if ($skip == 0 and $post_word and $post_word ne "") {
 	    $skip = 1;
-	    my @post_zhuyins = $Dict->query_zhuyin($post_word);
+	    my @post_zhuyins = $Dict->queryZhuYin($post_word);
 	    $skip = 0 if @post_zhuyins;
 	    my @tmp_zhuyins = ();
 	    foreach my $j (0..$#zhuyins) {
